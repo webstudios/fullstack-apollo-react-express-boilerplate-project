@@ -1,6 +1,6 @@
 # fullstack-apollo-react-express-boilerplate-project
 
-[![Slack](https://slack-the-road-to-learn-react.wieruch.com/badge.svg)](https://slack-the-road-to-learn-react.wieruch.com/)
+[![Slack](https://slack-the-road-to-learn-react.wieruch.com/badge.svg)](https://slack-the-road-to-learn-react.wieruch.com/) [![Greenkeeper badge](https://badges.greenkeeper.io/the-road-to-graphql/fullstack-apollo-react-express-boilerplate-project.svg)](https://greenkeeper.io/)
 
 A full-fledged Apollo Server 2 with Apollo Client 2 starter project with React, Express and PostgreSQL.
 
