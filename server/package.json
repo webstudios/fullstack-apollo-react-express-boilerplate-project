@@ -22,7 +22,10 @@
     "axios": "^0.18.0",
     "chai": "^4.2.0",
     "mocha": "^5.2.0",
-    "nodemon": "^1.18.4"
+    "nodemon": "^1.18.4",
+    "husky": "^1.1.2",
+    "lint-staged": "^7.3.0",
+    "prettier": "1.14.3"
   },
   "dependencies": {
     "apollo-server": "^2.1.0",
@@ -37,7 +40,18 @@
     "graphql-resolvers": "^0.2.2",
     "jsonwebtoken": "^8.3.0",
     "pg": "^7.5.0",
-    "sequelize": "^4.41.0",
+    "mongoose": "^5.3.7",
     "uuid": "^3.3.2"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.{js,json,css,md}": [
+      "prettier --config ../.prettierrc --write",
+      "git add"
+    ]
   }
 }
