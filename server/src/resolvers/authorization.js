@@ -14,12 +14,12 @@ export const isAdmin = combineResolvers(
 
 export const isMessageOwner = async (
   parent,
-  { id },
-  { models, me },
+  { id: _id },
+  { models: { Message }, me },
 ) => {
-  const message = await models.Message.findById(id, { raw: true });
+  const message = await Message.findOne({ _id });
 
-  if (message.userId !== me.id) {
+  if (message.user._id.toString() !== me._id.toString()) {
     throw new ForbiddenError('Not authenticated as owner.');
   }
 

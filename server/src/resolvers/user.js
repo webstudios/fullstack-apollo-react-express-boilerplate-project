@@ -5,26 +5,26 @@ import { AuthenticationError, UserInputError } from 'apollo-server';
 import { isAdmin, isAuthenticated } from './authorization';
 
 const createToken = async (user, secret, expiresIn) => {
-  const { id, email, username, role } = user;
-  return await jwt.sign({ id, email, username, role }, secret, {
+  const { _id, email, username, role } = user;
+  return await jwt.sign({ _id, email, username, role }, secret, {
     expiresIn,
   });
 };
 
 export default {
   Query: {
-    users: async (parent, args, { models }) => {
-      return await models.User.findAll();
-    },
-    user: async (parent, { id }, { models }) => {
-      return await models.User.findById(id);
-    },
-    me: async (parent, args, { models, me }) => {
-      if (!me) {
+    users: async (parent, args, { models }) =>
+      await models.User.find({}),
+
+    user: async (parent, { id: _id }, { models }) =>
+      await models.User.findOne({ _id }),
+
+    me: async (parent, args, { models, me: { _id } = {} }) => {
+      if (!_id) {
         return null;
       }
 
-      return await models.User.findById(me.id);
+      return await models.User.findOne({ _id });
     },
   },
 
@@ -32,23 +32,26 @@ export default {
     signUp: async (
       parent,
       { username, email, password },
-      { models, secret },
+      { models: { User }, secret },
     ) => {
-      const user = await models.User.create({
-        username,
-        email,
-        password,
-      });
+      let newUser = new User();
+      newUser.username = username;
+      newUser.email = email;
+      newUser.password = password;
 
-      return { token: createToken(user, secret, '30m') };
+      return {
+        token: createToken(await newUser.save(), secret, '30m'),
+      };
     },
 
     signIn: async (
       parent,
       { login, password },
-      { models, secret },
+      { models: { User }, secret },
     ) => {
-      const user = await models.User.findByLogin(login);
+      const user = await User.findOne({
+        $or: [{ email: login }, { username: login }],
+      });
 
       if (!user) {
         throw new UserInputError(
@@ -56,7 +59,10 @@ export default {
         );
       }
 
-      const isValid = await user.validatePassword(password);
+      const isValid = await user.validatePassword(
+        password,
+        user.hashed_password,
+      );
 
       if (!isValid) {
         throw new AuthenticationError('Invalid password.');
@@ -67,29 +73,22 @@ export default {
 
     updateUser: combineResolvers(
       isAuthenticated,
-      async (parent, { username }, { models, me }) => {
-        const user = await models.User.findById(me.id);
-        return await user.update({ username });
-      },
+      async (
+        parent,
+        { username },
+        { models: { User }, me: { _id } },
+      ) => await User.updateOne({ _id }, { $set: { username } }),
     ),
 
     deleteUser: combineResolvers(
       isAdmin,
-      async (parent, { id }, { models }) => {
-        return await models.User.destroy({
-          where: { id },
-        });
-      },
+      async (parent, { id: _id }, { models: { User } }) =>
+        await User.deleteOne({ _id }),
     ),
   },
 
   User: {
-    messages: async (user, args, { models }) => {
-      return await models.Message.findAll({
-        where: {
-          userId: user.id,
-        },
-      });
-    },
+    messages: async user =>
+      (await user.populate('messages').execPopulate()).messages,
   },
 };

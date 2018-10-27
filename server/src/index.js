@@ -11,8 +11,17 @@ import {
 
 import schema from './schema';
 import resolvers from './resolvers';
-import models, { sequelize } from './models';
+import models from './models';
 import loaders from './loaders';
+
+const port = process.env.PORT || 8000;
+
+let mongoose = require('mongoose');
+mongoose.Promise = global.Promise;
+mongoose.connect(
+  process.env.DATABASE,
+  { useNewUrlParser: true },
+);
 
 const app = express();
 
@@ -82,57 +91,57 @@ server.applyMiddleware({ app, path: '/graphql' });
 const httpServer = http.createServer(app);
 server.installSubscriptionHandlers(httpServer);
 
-const isTest = !!process.env.TEST_DATABASE;
-const isProduction = !!process.env.DATABASE_URL;
-const port = process.env.PORT || 8000;
-
-sequelize.sync({ force: isTest || isProduction }).then(async () => {
-  if (isTest || isProduction) {
-    createUsersWithMessages(new Date());
-  }
-
-  httpServer.listen({ port }, () => {
-    console.log(`Apollo Server on http://localhost:${port}/graphql`);
-  });
-});
-
 const createUsersWithMessages = async date => {
-  await models.User.create(
-    {
-      username: 'rwieruch',
-      email: 'hello@robin.com',
-      password: 'rwieruch',
-      role: 'ADMIN',
-      messages: [
-        {
-          text: 'Published the Road to learn React',
-          createdAt: date.setSeconds(date.getSeconds() + 1),
-        },
-      ],
-    },
-    {
-      include: [models.Message],
-    },
-  );
+  // destroy it all
+  await models.User.deleteMany({});
+  await models.Message.deleteMany({});
 
-  await models.User.create(
-    {
-      username: 'ddavids',
-      email: 'hello@david.com',
-      password: 'ddavids',
-      messages: [
-        {
-          text: 'Happy to release ...',
-          createdAt: date.setSeconds(date.getSeconds() + 1),
-        },
-        {
-          text: 'Published a complete ...',
-          createdAt: date.setSeconds(date.getSeconds() + 1),
-        },
-      ],
-    },
-    {
-      include: [models.Message],
-    },
-  );
+  // to rise again
+  let user1 = new models.User({
+    username: 'rwieruch',
+    email: 'hello@robin.com',
+    password: 'rwieruch',
+    role: 'ADMIN',
+  });
+
+  let user2 = new models.User({
+    username: 'ddavids',
+    email: 'hello@david.com',
+    password: 'ddavids',
+  });
+
+  let message1 = new models.Message({
+    text: 'Published the Road to learn React',
+    createdAt: date.setSeconds(date.getSeconds() + 1),
+    user: user1.id,
+  });
+
+  let message2 = new models.Message({
+    text: 'Happy to release a GraphQL in React tutorial',
+    createdAt: date.setSeconds(date.getSeconds() + 1),
+    user: user2.id,
+  });
+
+  let message3 = new models.Message({
+    text: 'A complete React with Apollo and GraphQL Tutorial',
+    createdAt: date.setSeconds(date.getSeconds() + 1),
+    user: user2.id,
+  });
+
+  message1.save();
+  message2.save();
+  message3.save();
+
+  user1.messages.push(message1.id);
+  user2.messages.push(message2.id);
+  user2.messages.push(message3.id);
+
+  user1.save();
+  user2.save();
 };
+
+createUsersWithMessages(new Date());
+
+httpServer.listen({ port }, () => {
+  console.log(`Apollo Server on http://localhost:${port}/graphql`);
+});

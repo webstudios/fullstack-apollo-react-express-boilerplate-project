@@ -1,8 +1,8 @@
-import Sequelize from 'sequelize';
 import { combineResolvers } from 'graphql-resolvers';
 
-import pubsub, { EVENTS } from '../subscription';
 import { isAuthenticated, isMessageOwner } from './authorization';
+
+import pubsub, { EVENTS } from '../subscription';
 
 const toCursorHash = string => Buffer.from(string).toString('base64');
 
@@ -11,49 +11,54 @@ const fromCursorHash = string =>
 
 export default {
   Query: {
-    messages: async (parent, { cursor, limit = 100 }, { models }) => {
-      const cursorOptions = cursor
-        ? {
-            where: {
-              createdAt: {
-                [Sequelize.Op.lt]: fromCursorHash(cursor),
-              },
-            },
-          }
+    messages: async (
+      parent,
+      { cursor, limit = 100, order = 'desc' },
+      { models: { Message } },
+    ) => {
+      const query = cursor
+        ? { createdAt: { $lt: fromCursorHash(cursor) } }
         : {};
-
-      const messages = await models.Message.findAll({
-        order: [['createdAt', 'DESC']],
+      const options = {
+        sort: { createdAt: order },
         limit: limit + 1,
-        ...cursorOptions,
-      });
-
-      const hasNextPage = messages.length > limit;
-      const edges = hasNextPage ? messages.slice(0, -1) : messages;
-
-      return {
-        edges,
-        pageInfo: {
-          hasNextPage,
-          endCursor: toCursorHash(
-            edges[edges.length - 1].createdAt.toString(),
-          ),
-        },
       };
+
+      return Message.find(query, {}, options).then(messages => {
+        const hasNextPage = messages.length > limit;
+        const edges = hasNextPage ? messages.slice(0, -1) : messages;
+
+        return {
+          edges,
+          pageInfo: {
+            hasNextPage,
+            endCursor: toCursorHash(
+              edges[edges.length - 1].createdAt.toString(),
+            ),
+          },
+        };
+      });
     },
-    message: async (parent, { id }, { models }) => {
-      return await models.Message.findById(id);
-    },
+
+    message: async (parent, { id: _id }, { models }) =>
+      await models.Message.findOne({ _id }),
   },
 
   Mutation: {
     createMessage: combineResolvers(
       isAuthenticated,
-      async (parent, { text }, { models, me }) => {
-        const message = await models.Message.create({
+      async (parent, { text }, { models: { Message, User }, me }) => {
+        let date = new Date();
+        let message = new Message({
+          user: me._id,
           text,
-          userId: me.id,
+          createdAt: date.setSeconds(date.getSeconds() + 1),
         });
+        await message.save();
+
+        let user = await User.findById(me._id);
+        user.messages.push(message.id);
+        await user.save();
 
         pubsub.publish(EVENTS.MESSAGE.CREATED, {
           messageCreated: { message },
@@ -66,16 +71,14 @@ export default {
     deleteMessage: combineResolvers(
       isAuthenticated,
       isMessageOwner,
-      async (parent, { id }, { models }) => {
-        return await models.Message.destroy({ where: { id } });
-      },
+      async (parent, { id: _id }, { models: { Message } }) =>
+        !!(await Message.deleteOne({ _id })),
     ),
   },
 
   Message: {
-    user: async (message, args, { loaders }) => {
-      return await loaders.user.load(message.userId);
-    },
+    user: async message =>
+      (await message.populate('user').execPopulate()).user,
   },
 
   Subscription: {
